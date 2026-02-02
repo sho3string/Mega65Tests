@@ -1,30 +1,69 @@
+// Background metatile generator (quad / 16×16 logic)
+//
+// The original background generator assumed a 2-row-tall metatile:
+// a single 16×8 “pixie” split across two text rows.
+// That meant rows alternated between (top) and (bottom) glyphs:
+//
+//   if (r even) use tile A
+//   if (r odd)  use tile B
+//
+// For quads we instead treat the background as 16×16 metatiles made of four 8×8 glyphs:
+//
+//   TL  TR
+//   BL  BR
+//
+// Each metatile occupies:
+//   - 2 text rows (top/bottom halves)
+//   - 2 text columns (left/right halves)
+//
+// So each screen cell (r,c) must resolve to:
+//   1) which metatile row we're in:      mr = r >> 1
+//   2) whether we're top or bottom half: rowHalf = r & 1        // 0=top, 1=bottom
+//   3) which metatile column we're in:   mc = c >> 1
+//   4) whether we're left/right half:    colHalf = c & 1        // 0=left, 1=right
+//
+// The glyph index is then computed from a metatile base + quadrant offset.
+// The tilesheet is 16 glyphs wide, so the bottom row of a quad is +$10 from the top row:
+//
+//   quadOfs = rowHalf * $10 + colHalf
+//
+// giving the final mapping:
+//
+//   rowHalf=0,colHalf=0 -> TL : base + $00
+//   rowHalf=0,colHalf=1 -> TR : base + $01
+//   rowHalf=1,colHalf=0 -> BL : base + $10
+//   rowHalf=1,colHalf=1 -> BR : base + $11
+//
+// IMPORTANT: randomness must be chosen per *metatile* (mc,mr), not per cell,
+// otherwise the four quadrants won't match and you'll get “broken quads”.
+
 .cpu _45gs02
 #import "mega65defs.s"	
 #import "m65macros.s"
 
-.const COLOR_RAM = $ff80000
-.const TAIL_SLOTS = 3
-.const NUM_ROWS = 26
+.const COLOR_RAM	= $ff80000
+.const TAIL_SLOTS	= 3
+.const NUM_ROWS		= 26
 .const VISIBLE_COLS = 40
-.const TAIL_WORDS     = TAIL_SLOTS * 2      // gotox + char for each slot
-.const TAIL_OFF	= VISIBLE_COLS * 2 // tail starts AFTER 40 visible cols = 80 bytes
-.const TAIL_LEN	= TAIL_SLOTS * 4   // 3 slots * 4 bytes = 12 
+.const TAIL_WORDS	= TAIL_SLOTS * 2      	// gotox + char for each slot
+.const TAIL_OFF		= VISIBLE_COLS * 2 		// tail starts AFTER 40 visible cols = 80 bytes
+.const TAIL_LEN		= TAIL_SLOTS * 4   		// 3 slots * 4 bytes = 12 
 
-.const LOGICAL_COLS = VISIBLE_COLS + TAIL_WORDS 
+.const LOGICAL_COLS 	= VISIBLE_COLS + TAIL_WORDS 
 .const LOGICAL_ROW_SIZE = LOGICAL_COLS * 2 // 43*2 = 86 bytes per row in RAM2
 
-.const MARKER0 = $98 // colour tail byte0: enables GOTOX + rowmask + transparency as used by this method
+.const MARKER0 		= $98 					// colour tail byte0: enables GOTOX + rowmask + transparency as used by this method
 .const SLOT0		= 0						// bytes 0..3
 .const SLOT1		= 4						// bytes 4..7
 .const SLOT2		= 8						// bytes 8..11
 
-.const CHR_TL		= 0 // top left
-.const CHR_TR		= 1 // top right
-.const CHR_BL		= 2 // bottom left
-.const CHR_BR		= 3 // bottom right 
+.const CHR_TL		= 0 					// top left
+.const CHR_TR		= 1 					// top right
+.const CHR_BL		= 2 					// bottom left
+.const CHR_BR		= 3 					// bottom right 
 
-.const SLOT0_GOTOX = 0   		// gotox word at 0/1, char at 2/3
-.const SLOT1_GOTOX = 4   		// gotox word at 4/5, char at 6/7
+.const SLOT0_GOTOX 	= 0   					// gotox word at 0/1, char at 2/3
+.const SLOT1_GOTOX 	= 4   					// gotox word at 4/5, char at 6/7
 .const BALL_CHAR_BASE = 4         
 
 * = $02 "Basepage" virtual
@@ -135,7 +174,7 @@ Entry: {
 		jsr CopyPalette
 		jsr CopyColors
 
-loop:
+	loop:
 		//wait for raster
 		lda #$fe
 		cmp $d012 
@@ -147,6 +186,7 @@ loop:
 		jsr RRBSprites
 		jmp loop
 }
+
 
 
 RRBSprites: {
@@ -409,14 +449,14 @@ Job:
 
 customPaletteTbl_1_Start:
 Red:
-.byte $00,$13,$15,$e5,$76,$e7,$6e,$fe,$5f,$59,$bf,$ff,$ff,$3b,$ff,$00 // 00 - 15
+.byte $ff,$13,$15,$e5,$76,$e7,$6e,$fe,$5f,$59,$bf,$ff,$ff,$3b,$ff,$00 // 00 - 15
 customPaletteTbl_1_End:
 
 Green:
-.byte $00,$b1,$d2,$53,$a3,$75,$15,$c6,$c7,$57,$c8,$89,$7a,$d9,$cc,$00 // 00 - 15
+.byte $ff,$b1,$d2,$53,$a3,$75,$15,$c6,$c7,$57,$c8,$89,$7a,$d9,$cc,$00 // 00 - 15
 
 Blue:
-.byte $00,$29,$8a,$1b,$7b,$2c,$00,$00,$00,$dc,$00,$00,$62,$bd,$08,$00 // 00 - 15
+.byte $ff,$29,$8a,$1b,$7b,$2c,$00,$00,$00,$dc,$00,$00,$62,$bd,$08,$00 // 00 - 15
 
 
 CopyPalette: {	
@@ -446,31 +486,59 @@ CopyColors: {
 		DMACopyJob(COLORS, COLOR_RAM, LOGICAL_ROW_SIZE * NUM_ROWS, false, false)
 }
 
-
+.const GLYPHS_PER_ROW	= $10   // 16 glyphs wide in the tilesheet
+.const MT_BASE_NORMAL	= $0200 // TL for normal 16x16 metatile
+.const MT_BASE_ALT	= $0202 // TL for alt 16x16 metatile (example)
+.const ALT_CHANCE		= 0.10  // 10% chance
 
 * = $4000
 SCREEN_BASE: {
-	.for(var r=0; r<NUM_ROWS; r++) {
-		.for(var c=0; c<VISIBLE_COLS; c++) {
-			.byte $00,$02
+    // We generate in metatile rows: each metatile row = 2 character rows
+    .for (var mr=0; mr<(NUM_ROWS/2); mr++) {
 
-      // to do
-			/*.if(mod(r,2)==0) {
-				.if(random() < 0.1) {
-					.byte $02,$02
-				} else {
-					.byte $00,$02
-				}
-			} else {
-				.byte $01,$02
-			}*/
-		}
-		// Tail slots (3 chars = 12 bytes)
-    .byte $00,$00, $06,$02   // slot0
-    .byte $00,$00, $06,$02
-    .byte $40,$01, $06,$02 
-	}
+        // Store the chosen base for each metatile column so bottom row matches top row
+        .var bases = List()
+
+        // ---------------------------
+        // Top character row (rowHalf=0)
+        // ---------------------------
+        .for (var mc=0; mc<(VISIBLE_COLS/2); mc++) {
+
+            .var chooseAlt = random() < ALT_CHANCE
+            .var base = chooseAlt ? MT_BASE_ALT : MT_BASE_NORMAL
+            .eval bases.add(base)
+
+
+            // TL, TR
+            .byte <(base + 0), >(base + 0)
+            .byte <(base + 1), >(base + 1)
+        }
+
+        // Tail slots live after visible area in RAM
+        .byte $00,$00, $06,$02   // slot0
+        .byte $00,$00, $06,$02   // slot1
+        .byte $40,$01, $06,$02   // slot2: gotox end-of-line
+
+        // ---------------------------
+        // Bottom character row (rowHalf=1)
+        // ---------------------------
+        .for (var mc=0; mc<(VISIBLE_COLS/2); mc++) {
+
+            .var base2 = bases.get(mc)
+
+            // BL, BR (bottom row is +$10 in your sheet)
+            .byte <(base2 + GLYPHS_PER_ROW + 0), >(base2 + GLYPHS_PER_ROW + 0)
+            .byte <(base2 + GLYPHS_PER_ROW + 1), >(base2 + GLYPHS_PER_ROW + 1)
+        }
+
+        // Tail slots again for the bottom row
+        .byte $00,$00, $06,$02   // slot0
+        .byte $00,$00, $06,$02   // slot1
+        .byte $40,$01, $06,$02   // slot2: gotox end-of-line
+    }
 }
+
+
 
 
 COLORS: {
@@ -481,9 +549,9 @@ COLORS: {
 			
         }
 		// Tail slots default (marker + “normal” byte1)
-      .byte $90,$00,  $00,$00   // slot0
-      .byte $90,$00,  $00,$00   // slot1
-      .byte $90,$00,  $00,$00   // slot2
+        .byte $90,$00,  $00,$00   // slot0
+        .byte $90,$00,  $00,$00   // slot1
+        .byte $90,$00,  $00,$00   // slot2
 			
 	}
 }
@@ -495,23 +563,23 @@ COLORS: {
 
 
 TopMask:
-  .byte %11111111
-  .byte %11111110
-  .byte %11111100
-  .byte %11111000
-  .byte %11110000
-  .byte %11100000
-  .byte %11000000
-  .byte %10000000
+    .byte %11111111
+	.byte %11111110
+	.byte %11111100
+	.byte %11111000
+	.byte %11110000
+	.byte %11100000
+	.byte %11000000
+	.byte %10000000
 BotMask:
-  .byte %00000000
-  .byte %00000001
-  .byte %00000011
-  .byte %00000111
-  .byte %00001111
-  .byte %00011111
-  .byte %00111111
-  .byte %01111111
+    .byte %00000000
+	.byte %00000001
+	.byte %00000011
+	.byte %00000111
+	.byte %00001111
+	.byte %00011111
+	.byte %00111111
+	.byte %01111111
 	
 
 RRBRowTableLo:
