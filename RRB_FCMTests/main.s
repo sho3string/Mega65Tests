@@ -42,16 +42,16 @@
 	
 */
 
-.const COLOR_RAM			= $ff80000
+.const COLOR_RAM		= $ff80000
 .const NUM_ROWS			= 26
 .const VISIBLE_COLS		= 40
-.const TAIL_SLOTS			= 5
-.const ROW_CELLS			= VISIBLE_COLS + (TAIL_SLOTS*2)	// 50 bytes
+.const TAIL_SLOTS		= 5
+.const ROW_CELLS		= VISIBLE_COLS + (TAIL_SLOTS*2)	// 50 bytes
 .const TAIL_OFF			= VISIBLE_COLS * 2					// 80 bytes after visible area
 .const TAIL_LEN			= TAIL_SLOTS * 4        			// 20 bytes - 5 Slots
-.const LOGICAL_ROW_SIZE	= (VISIBLE_COLS * 2) + TAIL_LEN	// 100 bytes
-.const MARKER0				= $98								// colour tail byte0: enables GOTOX + rowmask + transparency as used by this method
-.const COL_GOTOX			= $90								// transparency + gotox marker
+.const LOGICAL_ROW_SIZE	= (VISIBLE_COLS * 2) + TAIL_LEN		// 100 bytes
+.const MARKER0			= $98								// colour tail byte0: enables GOTOX + rowmask + transparency as used by this method
+.const COL_GOTOX		= $90								// transparency + gotox marker
 
 .const SLOT0 = 0
 .const SLOT1 = 4
@@ -74,12 +74,12 @@ tilesheet layout => sprite data layout
 */
 
 .const GLYPHS_PER_ROW 	= $10
-.const CHR_TL 				= 0
-.const CHR_TR 				= GLYPHS_PER_ROW
-.const CHR_BL 				= $1
-.const CHR_BR				= GLYPHS_PER_ROW + 1
-.const CHR_B1				= $2
-.const CHR_B2				= $12
+.const CHR_TL 			= 0
+.const CHR_TR 			= GLYPHS_PER_ROW
+.const CHR_BL 			= $1
+.const CHR_BR			= GLYPHS_PER_ROW + 1
+.const CHR_B1			= $2
+.const CHR_B2			= $12
 .const BALL_CHAR_BASE 	= $0204
 
 * = $02 "Basepage" virtual
@@ -93,8 +93,8 @@ tilesheet layout => sprite data layout
   ypos2:			.byte 0
   x2_lo:			.byte 0
   x2_hi:			.byte 0
-  ScreenVector:	.word 0
-  ColorPtr:		.byte 0,0,0,0
+  ScreenVector:		.word 0
+  ColorPtr:			.byte 0,0,0,0
 
 BasicUpstart65(Entry)
 * = $2016 "Basic Entry"
@@ -610,3 +610,4 @@ TailColorTemplate:
 	.byte COL_GOTOX,$00,  $00,$00
 	.byte COL_GOTOX,$00,  $00,$00
 	.byte COL_GOTOX,$00,  $00,$00
+
